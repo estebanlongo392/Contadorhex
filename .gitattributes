@@ -1,2 +1,143 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+//***************************************************
+// Universidad del Valle de Guatemala
+// IE2023: Programación de Microcontroladores 
+// Autor: Esteban Longo Marroquin
+// Proyecto: Laboratorio 2
+// Descripción: Contador
+// Hardware: ATMEGA328P
+// Created: 02/02/2024 00:17:30
+//****************************************************
+// Encabezado 
+//****************************************************
+.include "M328PDEF.inc"
+
+.cseg
+.org 0x00
+
+//****************************************************
+//Configuración de la Pila
+//****************************************************
+LDI R16, LOW(RAMEND)
+OUT SPL, R16
+LDI R17, HIGH(RAMEND)
+OUT SPH, R17
+
+TABLA7SEG: .DB 0x7E, 0x0C, 0xB6, 0x9E, 0xCC, 0xFA, 0x0E, 0xFE, 0xDE, 0xEE, 0xF8, 0x72, 0xBC, 0xF2, 0xE2, 0xFF
+//****************************************************
+
+//****************************************************
+//Configuración MCU
+//****************************************************
+SETUP:
+	LDI R16, 0b0001_1111 //Configuramos al pueto B como entradas
+	OUT	PORTB, R16
+
+	LDI R16, 0b0000_0000 //Configuración al puerto B como pull ups
+	OUT DDRB, R16
+	
+	LDI R16, 0b1011_1111	//Configuramos el puerto C como salidas
+	OUT DDRC, R16
+
+	LDI R16, 0b1111_1111	//Configuramos el puerto D como salidas
+	OUT DDRD, R16
+
+	CALL Init_T0
+
+
+Main: 
+	LDI R20, 0
+	LDI R21, 0x00
+	
+
+//****************************************************
+//Configuración LOOP
+//****************************************************
+
+LOOP:
+	LDI ZH, HIGH(TABLA7SEG << 1)
+	LDI ZL, LOW(TABLA7SEG << 1)
+	ADD ZL, R20
+	LPM R25, Z
+	OUT PORTD, R25
+
+	IN R21, PINB
+	SBRS R21, PB0	//Analizamos si el pin B0 = 1, si lo es saltamos el call, si no lo es entramos al call
+	CALL NUM1		//Llamamos a la subrutina NUM1 
+	SBRS R21, PB1	//Analizamos si el pin B1 = 1, si lo es saltamos el call, si no lo es entramos al call
+	CALL NUM2		//Llamamos a la subrutina NUM1 
+	
+	IN R16, TIFR0
+	CPI	 R16, (1<<TOV0)   //Lectura y comparación de la bandera del timer 0
+	BRNE SKIP_LOOP
+
+	LDI R16, 100
+	OUT TCNT0, R16
+
+	SBI TIFR0, TOV0 
+
+	INC R22
+	CPI R22, 100
+	BRNE SKIP_LOOP
+	CLR R22
+	INC R23
+	OUT PORTC, R23 
+	CPI R23, 16
+	BRNE SKIP_RESET_COUNTER
+	CLR R23
+
+SKIP_RESET_COUNTER:
+	SBI PINC, PC5
+
+	SKIP_LOOP:
+
+
+	SBIC PINC, PC6
+	SBI PINC, PC5
+	RJMP LOOP
+
+
+//****************************************************
+//Subrutina 
+//****************************************************
+
+//Esta subrutina sirve para el antirrebote del pushbutton
+// y tambien sirve para incrementar el valor de R18 
+NUM1:
+	LDI R17, 200  //Sirve para hacer un delay
+	LDI R24, (0<< CS02)| (0<< CS00) //Prescaleer de 1024
+	OUT TCCR0B, R24
+	CALL Init_T0 
+	delay:
+		DEC R17
+		BRNE delay
+	SBIS PINB, PB0		//Analiza que el puerto no siga teniendo entrada de información
+	RJMP NUM1
+	INC R20
+	RJMP LOOP
+
+//Esta subrutina sirve para el antirrebote del pushbutton
+// y tambien sirve para decrementar el valor de R18 
+
+NUM2:
+	LDI R17, 200  //Sirve para hacer un delay
+	LDI R24, (0<< CS02)| (0<< CS00) // Prescaleer de 1024
+	OUT TCCR0B, R24
+	CALL Init_T0 
+	delay2:
+		DEC R17
+		BRNE delay2
+	SBIS PINB, PB1	//Analiza que el puerto no siga teniendo entrada de información
+	RJMP NUM2
+	DEC R20
+	RJMP LOOP
+
+
+Init_T0:
+	LDI R24, (1<< CS02)| (1<< CS00) // Prescaleer de 1024
+	OUT TCCR0B, R24
+
+	LDI R24, 100   //Valor del prescaleer
+	OUT TCNT0, R24 
+	 
+	RET
+//****************************************************
